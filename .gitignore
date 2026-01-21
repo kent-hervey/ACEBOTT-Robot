@@ -1,0 +1,36 @@
+# ESP-IDF generated build artifacts
+build/
+sdkconfig.old
+*.bin
+*.elf
+*.map
+*.json
+*.S
+*.o
+*.obj
+*.a
+*.ninja_deps
+*.ninja_log
+flasher_args.json
+partition_table/
+bootloader/
+esp-idf/
+*.stamp
+*.tmp
+
+# CLion / JetBrains IDE files
+.idea/
+*.iml
+cmake-build-*/
+cmake-build-*/**
+
+# macOS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Misc
+*.bak
+*.swp
+*.swo
+EOF
