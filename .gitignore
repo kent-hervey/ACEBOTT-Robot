@@ -34,3 +34,4 @@ cmake-build-*/**
 *.swp
 *.swo
 EOF
+/main/secrets.h
