@@ -33,5 +33,5 @@ cmake-build-*/**
 *.bak
 *.swp
 *.swo
-EOF
-/main/secrets.h
+
+secrets.h
