@@ -76,23 +76,30 @@ static esp_err_t send_big_html_page(httpd_req_t *req) {
     // We use <h1> for huge titles and <button> with large padding
     // style='font-size: 40px' makes it very readable on an old phone
     const char* html =
-        "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-        "<style>"
-        "body { font-family: sans-serif; text-align: center; background: #f0f0f0; }"
-        "h1 { font-size: 50px; color: #333; }"
-        "h2 { font-size: 40px; color: blue; }"
-        ".btn { width: 90%; padding: 40px; margin: 20px; font-size: 35px; border-radius: 15px; border: none; cursor: pointer; }"
-        ".fwd { background-color: #4CAF50; color: white; }"
-        ".rev { background-color: #2196F3; color: white; }"
-        ".stop { background-color: #f44336; color: white; }"
-        "</style></head><body>"
-        "<h1>H-Bridge Control</h1>"
-        "<h1>Status:</h1>"
-        "<h2>%s</h2>" // This %s will be replaced by our 'last_direction' string
-        "<button class='btn fwd' onclick=\"location.href='/fwd'\">FORWARD</button>"
-        "<button class='btn rev' onclick=\"location.href='/rev'\">REVERSE</button>"
-        "<button class='btn stop' onclick=\"location.href='/stop'\">STOP NOW</button>"
-        "</body></html>";
+            "<!DOCTYPE html>"
+            "<html>"
+            "<head>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+            "<style>"
+            "body { font-family: sans-serif; text-align: center; background: #f0f0f0; }"
+            "h1 { font-size: 40px; color: #333; }"
+            "h2 { font-size: 10px; color: blue; }"
+            ".btn { width: 40%; padding: 5px; margin: 20px; font-size: 20px; border-radius: 15px; border: none; cursor: pointer; }"
+            ".fwd { background-color: #4CAF50; color: white; }"
+            ".rev { background-color: #2196F3; color: white; }"
+            ".stop { background-color: #f44336; color: white; }"
+            "</style>"
+            "</head>"
+            "<body>"
+            "<h1>H-Bridge Control</h1>"
+            "<h1>Status:</h1>"
+            "<h2>%s</h2>"
+            "<button class='btn fwd' onclick=\"location.href='/fwd'\">FORWARD</button>"
+            "<button class='btn rev' onclick=\"location.href='/rev'\">REVERSE</button>"
+            "<button class='btn stop' onclick=\"location.href='/stop'\">STOP NOW</button>"
+            "</body>"
+            "</html>";
+
 
     char formatted_html[2000];
     sprintf(formatted_html, html, last_direction); // Put the status into the HTML
