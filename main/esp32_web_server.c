@@ -15,7 +15,12 @@
 // ==========================================
 // CONFIGURATION & PINS
 // ==========================================
-#define USE_SOFTAP_MODE 1
+// Mode selection:
+// 1 = STA ONLY
+// 2 = STA with AP FALLBACK
+// 3 = BOTH (Dual Mode)
+#define WIFI_OPERATION_MODE 2
+
 #define RELAY_PIN_A     18
 #define RELAY_PIN_B     19
 #define BLUE_LED_PIN    2  // The built-in LED on most DevKit boards
@@ -73,30 +78,36 @@ void led_blink_task(void *pvParameter) {
 // ==========================================
 
 static esp_err_t send_big_html_page(httpd_req_t *req) {
-    // We use <h1> for huge titles and <button> with large padding
-    // style='font-size: 40px' makes it very readable on an old phone
-    const char* html =
-        "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>"
-        "<style>"
-        "body { font-family: sans-serif; text-align: center; background: #f0f0f0; }"
-        "h1 { font-size: 50px; color: #333; }"
-        "h2 { font-size: 40px; color: blue; }"
-        ".btn { width: 90%; padding: 40px; margin: 20px; font-size: 35px; border-radius: 15px; border: none; cursor: pointer; }"
-        ".fwd { background-color: #4CAF50; color: white; }"
-        ".rev { background-color: #2196F3; color: white; }"
-        ".stop { background-color: #f44336; color: white; }"
-        "</style></head><body>"
-        "<h1>H-Bridge Control</h1>"
-        "<h1>Status:</h1>"
-        "<h2>%s</h2>" // This %s will be replaced by our 'last_direction' string
-        "<button class='btn fwd' onclick=\"location.href='/fwd'\">FORWARD</button>"
-        "<button class='btn rev' onclick=\"location.href='/rev'\">REVERSE</button>"
-        "<button class='btn stop' onclick=\"location.href='/stop'\">STOP NOW</button>"
-        "</body></html>";
+    // 1. Get connection mode
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    const char* mode_str = (mode == WIFI_MODE_STA) ? "Home Network (Eero)" : "Direct Hotspot";
 
-    char formatted_html[2000];
-    sprintf(formatted_html, html, last_direction); // Put the status into the HTML
-    return httpd_resp_send(req, formatted_html, HTTPD_RESP_USE_STRLEN);
+    // 2. Send Header & CSS in a chunk
+    httpd_resp_sendstr_chunk(req, "<html><head><meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+    httpd_resp_sendstr_chunk(req, "<style>body{font-family:sans-serif;text-align:center;background:#f4f4f4;margin:0;padding:10px;}"
+                                  ".status-bar{background:#333;color:#fff;padding:8px;font-size:14px;border-radius:5px;margin-bottom:15px;}"
+                                  "h1{font-size:28px;margin:10px 0;}"
+                                  ".m-status{font-size:24px;color:blue;font-weight:bold;margin:15px 0;}"
+                                  ".btn{width:85%;padding:20px;margin:10px;font-size:22px;font-weight:bold;border-radius:50px;border:none;color:white;cursor:pointer;}"
+                                  ".fwd{background:#4CAF50;}.rev{background:#2196F3;}.stop{background:#f44336;width:60%;padding:15px;font-size:18px;}</style></head><body>");
+
+    // 3. Send the Status Bar
+    char status_html[256];
+    snprintf(status_html, sizeof(status_html), "<div class='status-bar'>Connected via: %s</div><h1>H-Bridge Control</h1>", mode_str);
+    httpd_resp_sendstr_chunk(req, status_html);
+
+    // 4. Send the Motor Status and Buttons
+    char motor_html[512];
+    snprintf(motor_html, sizeof(motor_html), "<div>Motor Status:</div><div class='m-status'>%s</div>"
+                                             "<button class='btn fwd' onclick=\"location.href='/fwd'\">FORWARD</button>"
+                                             "<button class='btn rev' onclick=\"location.href='/rev'\">REVERSE</button>"
+                                             "<button class='btn stop' onclick=\"location.href='/stop'\">STOP NOW</button>"
+                                             "</body></html>", last_direction);
+    httpd_resp_sendstr_chunk(req, motor_html);
+
+    // 5. Tell the server we are done
+    return httpd_resp_sendstr_chunk(req, NULL);
 }
 
 static esp_err_t on_forward(httpd_req_t *req) {
@@ -134,6 +145,31 @@ static const httpd_uri_t uri_stop = { .uri = "/stop", .method = HTTP_GET, .handl
 // INITIALIZATION
 // ==========================================
 
+// This handles Wi-Fi events (connecting, disconnecting, getting IP)
+static int s_retry_num = 0;
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_retry_num < 5) { // Try 5 times
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TAG, "Retrying connection to Eero...");
+        } else {
+            ESP_LOGI(TAG, "Failed to connect to Eero.");
+#if WIFI_OPERATION_MODE == 2
+            ESP_LOGI(TAG, "Switching to SoftAP Fallback...");
+            esp_wifi_set_mode(WIFI_MODE_AP);
+#endif
+        }
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "Connected! IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
+    }
+}
+
 void app_main(void) {
     // 1. Initialize Memory
     esp_err_t ret = nvs_flash_init();
@@ -161,24 +197,53 @@ void app_main(void) {
     // 5. Start WiFi
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init(&cfg);
 
-    wifi_config_t ap_config = {
-        .ap = { .ssid = AP_SSID, .password = AP_PASS, .max_connection = 4, .authmode = WIFI_AUTH_WPA2_PSK }
-    };
-    esp_wifi_set_mode(WIFI_MODE_AP);
-    esp_wifi_set_config(WIFI_IF_AP, &ap_config);
-    esp_wifi_start();
+    // Create both interfaces (STA and AP)
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();
+
+    // SET HOSTNAME: This is what Eero will see
+    esp_netif_set_hostname(sta_netif, DEVICE_HOSTNAME);
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // Register the event handler we pasted in Step 1
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
+
+    // Pull credentials from secrets.h
+    wifi_config_t sta_config = { .sta = { .ssid = EXAMPLE_ESP_WIFI_SSID, .password = EXAMPLE_ESP_WIFI_PASS } };
+    wifi_config_t ap_config  = { .ap  = { .ssid = AP_SSID, .password = AP_PASS, .max_connection = 4, .authmode = WIFI_AUTH_WPA2_PSK } };
+
+    // Apply the logic for your 3 modes
+    #if WIFI_OPERATION_MODE == 1
+        esp_wifi_set_mode(WIFI_MODE_STA);
+        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+    #elif WIFI_OPERATION_MODE == 2
+        esp_wifi_set_mode(WIFI_MODE_STA); // Start with STA, handler will switch to AP if fail
+        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+        esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    #elif WIFI_OPERATION_MODE == 3
+        esp_wifi_set_mode(WIFI_MODE_APSTA);
+        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+        esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+    #endif
+
+    ESP_ERROR_CHECK(esp_wifi_start());
 
     // 6. Start the Server
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+
+    // This allows the server to listen on both STA and AP interfaces
+    config.lru_purge_enable = true;
+
     if (httpd_start(&server, &config) == ESP_OK) {
         httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_fwd);
         httpd_register_uri_handler(server, &uri_rev);
         httpd_register_uri_handler(server, &uri_stop);
+        ESP_LOGI(TAG, "Web server started successfully!");
     }
 }
