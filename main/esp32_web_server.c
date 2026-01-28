@@ -15,11 +15,8 @@
 // ==========================================
 // CONFIGURATION & PINS
 // ==========================================
-// Mode selection:
-// 1 = STA ONLY
-// 2 = STA with AP FALLBACK
-// 3 = BOTH (Dual Mode)
-#define WIFI_OPERATION_MODE 2
+// Wi-Fi Mode configuration (defined in secrets.h)
+// 1 = STA ONLY, 2 = STA with AP FALLBACK, 3 = BOTH
 
 #define RELAY_PIN_A     18
 #define RELAY_PIN_B     19
