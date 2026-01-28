@@ -152,6 +152,12 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+
+        // --- NEW DIAGNOSTIC CODE ---
+        wifi_event_sta_disconnected_t* disconn = (wifi_event_sta_disconnected_t*) event_data;
+        ESP_LOGE(TAG, "Eero Disconnect Reason: %d", disconn->reason);
+        // ---------------------------
+
         if (s_retry_num < 5) { // Try 5 times
             esp_wifi_connect();
             s_retry_num++;
@@ -213,24 +219,46 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
     // Pull credentials from secrets.h
-    wifi_config_t sta_config = { .sta = { .ssid = EXAMPLE_ESP_WIFI_SSID, .password = EXAMPLE_ESP_WIFI_PASS } };
+    wifi_config_t sta_config = {
+        .sta = {
+            .ssid = EXAMPLE_ESP_WIFI_SSID,
+            .password = EXAMPLE_ESP_WIFI_PASS,
+            .scan_method = WIFI_ALL_CHANNEL_SCAN,
+            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
+            .threshold.authmode = WIFI_AUTH_OPEN,       // ENGINEER TWEAK: Relaxed search threshold
+        },
+    };
+
     wifi_config_t ap_config  = { .ap  = { .ssid = AP_SSID, .password = AP_PASS, .max_connection = 4, .authmode = WIFI_AUTH_WPA2_PSK } };
 
     // Apply the logic for your 3 modes
-    #if WIFI_OPERATION_MODE == 1
-        esp_wifi_set_mode(WIFI_MODE_STA);
-        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
-    #elif WIFI_OPERATION_MODE == 2
-        esp_wifi_set_mode(WIFI_MODE_STA); // Start with STA, handler will switch to AP if fail
-        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
-        esp_wifi_set_config(WIFI_IF_AP, &ap_config);
-    #elif WIFI_OPERATION_MODE == 3
-        esp_wifi_set_mode(WIFI_MODE_APSTA);
-        esp_wifi_set_config(WIFI_IF_STA, &sta_config);
-        esp_wifi_set_config(WIFI_IF_AP, &ap_config);
-    #endif
+#if WIFI_OPERATION_MODE == 1
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+#elif WIFI_OPERATION_MODE == 2
+    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+    esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+#elif WIFI_OPERATION_MODE == 3
+    esp_wifi_set_mode(WIFI_MODE_APSTA);
+    esp_wifi_set_config(WIFI_IF_STA, &sta_config);
+    esp_wifi_set_config(WIFI_IF_AP, &ap_config);
+#endif
+
+    // ENGINEER TWEAK: Set Country Code before starting to ensure timing/channel alignment
+    wifi_country_t country = {
+        .cc = "US",
+        .schan = 1,
+        .nchan = 11,
+        .policy = WIFI_COUNTRY_POLICY_AUTO
+    };
+    esp_wifi_set_country(&country);
 
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    // Add this immediately after esp_wifi_start();
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+    ESP_LOGI(TAG, "Wi-Fi 802.11b disabled for Eero stability.");
 
     // 6. Start the Server
     httpd_handle_t server = NULL;
