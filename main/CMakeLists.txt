@@ -1,2 +1,2 @@
-idf_component_register(SRCS "esp32_web_server.c"
-                    INCLUDE_DIRS ".")
+idf_component_register(SRCS "acebott_main.c"
+        INCLUDE_DIRS ".")

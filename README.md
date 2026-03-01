@@ -1,21 +1,31 @@
-# ESP32 H-Bridge Web Controller
+# ACEBOTT-Robot 🏎️
 
-### Purpose
-A foundational building block for controlling an ESP32 to open, close, or toggle devices (like motors or actuators) via an H-Bridge configuration. The system is accessible via a web page on the same network or through a direct WiFi connection (SoftAP) to the ESP32.
+This repository contains the ESP-IDF firmware for the **ACEBOTT ESP32 Robot Car**.
 
-## Features
-- **Dual Mode WiFi:** Supports connecting to an existing router or acting as a standalone Access Point.
-- **H-Bridge Logic:** Controls two GPIO pins (18 & 19) for Forward/Reverse/Stop functionality.
-- **Safety Timeout:** Automatic 5-second shutoff to prevent hardware strain.
-- **Visual Feedback:** Built-in LED (GPIO 2) blinks at different speeds based on motor direction.
-- **Mobile-Friendly UI:** Large buttons designed specifically for use on smartphones.
+## 📌 Project Overview
+The goal of this project is to provide a robust C-based firmware that allows for real-time control of the ACEBOTT car via a built-in web server. This allows you to drive the robot and monitor its sensors directly from a mobile phone or computer browser.
 
-## Hardware Requirements
-- ESP32 Development Board
-- Dual-channel Relay Module or H-Bridge Motor Driver
-- Power supply suitable for your specific motor/actuator
+## 🛠️ Features
+- **WiFi Web Server:** Hosted directly on the ESP32.
+- **Motor Control:** Logic for forward, backward, and steering.
+- **ESP-IDF v5.4:** Built using the latest stable framework.
+- **Clean Architecture:** Organized for easy expansion with new sensors.
 
-## Setup
-1. Create a `main/secrets.h` file (refer to `secrets.h.template`).
-2. Define your WiFi credentials and preferred mode (SoftAP vs STA).
-3. Build and flash using ESP-IDF.
+## 🚀 Getting Started
+To get this code onto your robot car, follow these steps:
+
+### Prerequisites
+- **CLion IDE** with the **ESP-IDF Plugin** installed.
+- **ESP-IDF v5.4** configured in your environment.
+
+### Installation & Build
+1. **Clone the repo:**
+   `git clone https://github.com/kent-hervey/ACEBOTT-Robot.git`
+2. **Open in CLion:** Open the folder and wait for the CMake sync to finish.
+3. **Build:** Click the **Hammer icon** (Build) to generate the binary.
+4. **Flash:** Connect your ESP32 via USB and click the **Play icon** (Flash).
+
+## 📂 File Structure
+- `main/acebott_main.c`: The primary application logic.
+- `CMakeLists.txt`: Project configuration and naming.
+- `.gitignore`: Carefully tuned to keep the repo clean of build artifacts.
