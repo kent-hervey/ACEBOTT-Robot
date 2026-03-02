@@ -10,6 +10,7 @@ To make this project accessible to everyone, we have created a dedicated guide f
 
 * **[How It Works (Technical & Functional Overview)](docs/HOW_IT_WORKS.md)**:
   A visual guide explaining the robot's hardware components, sensor priorities (Obstacle Avoidance vs. Line Following), and how the IR remote handles smooth acceleration.
+* **[Hardware GPIO Map](docs/HARDWARE_MAP.md)**: Master list of ESP32 pin assignments.
 
 ## 🛠️ Features
 - **WiFi Web Server:** Hosted directly on the ESP32.
