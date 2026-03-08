@@ -2,6 +2,21 @@
 
 This repository contains the ESP-IDF firmware for the **ACEBOTT ESP32 Robot Car**.
 
+### 📖 Project Resources
+* **Official Product Page:** [ACEBOTT QD001 Smart Car Kit](https://shop.acebott.com/products/qd001-esp32-smart-car-kit-collection)
+* **Hardware Documentation:** [Hardware GPIO Map](docs/HARDWARE_MAP.md)
+* **Technical Overview:** [How It Works](docs/HOW_IT_WORKS.md)
+
+### 🛠️ Hardware Specifications
+| Component | Specification |
+| :--- | :--- |
+| **Core Controller** | ESP32-WROOM-32E |
+| **Drive System** | 4WD Mecanum (Omni-directional) |
+| **Framework** | ESP-IDF (C-based) |
+| **Base Model** | QD001 |
+
+---
+
 ## 📌 Project Overview
 The goal of this project is to provide a robust C-based firmware that allows for real-time control of the ACEBOTT car via a built-in web server. This allows you to drive the robot and monitor its sensors directly from a mobile phone or computer browser.
 
