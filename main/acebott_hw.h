@@ -1,7 +1,3 @@
-//
-// Created by Kent Hervey on 3/6/26.
-//
-
 #ifndef ACEBOTT_HW_H
 #define ACEBOTT_HW_H
 
@@ -34,7 +30,6 @@ void acebott_init(void);
 void acebott_move(motor_dir_t dir, uint8_t speed);
 void acebott_beep(uint32_t freq, uint32_t duration_ms);
 float acebott_get_distance(void);
-// Add these to the "Public API" section of acebott_hw.h
 ir_button_t acebott_get_ir_command(void);
 void acebott_read_line_sensors(int *l, int *m, int *r);
 

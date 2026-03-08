@@ -1,38 +1,54 @@
-//
-// Created by Kent Hervey on 3/6/26.
-//
+#define SDKCONFIG_DEPRECATED_DRIVERS_ALLOW 1
 #include "acebott_hw.h"
 #include "driver/gpio.h"
 #include "driver/ledc.h"
+#include "driver/adc_types_legacy.h"
+#include "driver/rmt_types_legacy.h"
 #include "esp_rom_sys.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/adc.h" // Needed for the line sensors
+#include "driver/adc.h"
+#include "driver/rmt.h"
+#include "freertos/ringbuf.h"
+#include "esp_cpu.h"
 
-// Pin Definitions from Acebott schematics
-#define PIN_MOTOR_EN     16
-#define PIN_MOTOR_DATA    5
-#define PIN_MOTOR_LATCH  17
-#define PIN_MOTOR_CLOCK  18
-#define PIN_BUZZER       33
-#define PIN_PWM1         19
-#define PIN_PWM2         23
-// Add these to acebott_hw.c
-#define PIN_LINE_L 35
-#define PIN_LINE_M 36
-#define PIN_LINE_R 39
+#define PIN_MOTOR_EN        16
+#define PIN_MOTOR_DATA      14
+#define PIN_MOTOR_LATCH     12
+#define PIN_MOTOR_CLOCK     15
+#define PIN_PWM1            19
+#define PIN_BUZZER          33
+#define PIN_LINE_L          35
+#define PIN_LINE_M          36
+#define PIN_LINE_R          39
+#define PIN_IR_RX           25
+#define PIN_ULTRASONIC_TRIG 13
+#define PIN_ULTRASONIC_ECHO 27
 
 void acebott_init(void) {
-    // GPIO Config for Shift Register
-    gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL<<PIN_MOTOR_EN) | (1ULL<<PIN_MOTOR_DATA) |
-                        (1ULL<<PIN_MOTOR_LATCH) | (1ULL<<PIN_MOTOR_CLOCK),
-        .mode = GPIO_MODE_OUTPUT
+    // Configure ultrasonic echo pin as input
+    gpio_config_t echo_conf = {
+        .pin_bit_mask = (1ULL << PIN_ULTRASONIC_ECHO),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
     };
-    gpio_config(&io_conf);
-    gpio_set_level(PIN_MOTOR_EN, 1); // Start Disabled
+    gpio_config(&echo_conf);
 
-    // PWM Config for Buzzer & Motors
+    // Configure motor control pins and ultrasonic trigger as outputs before use
+    gpio_config_t out_conf = {
+        .pin_bit_mask = (1ULL << PIN_MOTOR_EN) | (1ULL << PIN_MOTOR_DATA) | (1ULL << PIN_MOTOR_LATCH) | (1ULL << PIN_MOTOR_CLOCK) | (1ULL << PIN_ULTRASONIC_TRIG),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&out_conf);
+
+    gpio_set_level(PIN_MOTOR_EN, 1);
+
     ledc_timer_config_t timer_conf = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .duty_resolution = LEDC_TIMER_13_BIT,
@@ -41,46 +57,82 @@ void acebott_init(void) {
         .clk_cfg = LEDC_AUTO_CLK
     };
     ledc_timer_config(&timer_conf);
+
+    ledc_channel_config_t pwm_chan = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .timer_sel = LEDC_TIMER_0,   // Changed back to timer_sel per log
+        .gpio_num = PIN_PWM1,
+        .duty = 0
+    };
+    ledc_channel_config(&pwm_chan);
+
+    adc1_config_width(ADC_WIDTH_BIT_12);
+    adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_11);
+
+    rmt_config_t rmt_rx = {
+        .rmt_mode = RMT_MODE_RX, .channel = RMT_CHANNEL_0,
+        .gpio_num = PIN_IR_RX, .clk_div = 80, .mem_block_num = 1
+    };
+    rmt_config(&rmt_rx);
+    rmt_driver_install(rmt_rx.channel, 1000, 0);
 }
 
 void acebott_move(motor_dir_t dir, uint8_t speed) {
-    // 1. Bit-bang the 74HC595
     gpio_set_level(PIN_MOTOR_LATCH, 0);
     for (int i = 0; i < 8; i++) {
         gpio_set_level(PIN_MOTOR_DATA, (dir >> (7 - i)) & 1);
-        gpio_set_level(PIN_MOTOR_CLOCK, 1);
-        esp_rom_delay_us(1);
+        gpio_set_level(PIN_MOTOR_CLOCK, 1); esp_rom_delay_us(1);
         gpio_set_level(PIN_MOTOR_CLOCK, 0);
     }
     gpio_set_level(PIN_MOTOR_LATCH, 1);
-
-    // 2. Enable Motors
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, (speed * 8191) / 255);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
     gpio_set_level(PIN_MOTOR_EN, 0);
-    // (PWM speed logic would be set here via ledc_set_duty)
 }
 
-void acebott_beep(uint32_t freq, uint32_t duration_ms) {
-    // Setup PWM frequency for the buzzer
-    ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, freq);
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 4096); // 50% duty
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
-
-    vTaskDelay(pdMS_TO_TICKS(duration_ms));
-
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0); // Silence
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+void acebott_read_line_sensors(int *l, int *m, int *r) {
+    *l = adc1_get_raw(ADC1_CHANNEL_7);
+    *m = adc1_get_raw(ADC1_CHANNEL_0);
+    *r = adc1_get_raw(ADC1_CHANNEL_3);
 }
 
-// Temporary placeholder for IR until we add the RMT driver
+float acebott_get_distance(void) {
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 0); esp_rom_delay_us(2);
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 1); esp_rom_delay_us(10);
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 0);
+    uint32_t start_tick = esp_cpu_get_cycle_count();
+    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 0) {
+        if ((esp_cpu_get_cycle_count() - start_tick) > 2000000) return -1.0f;
+    }
+    uint64_t start_time = esp_timer_get_time();
+    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 1) {
+        if ((esp_timer_get_time() - start_time) > 30000) break;
+    }
+    return ((float)(esp_timer_get_time() - start_time) * 0.0343) / 2.0;
+}
+
 ir_button_t acebott_get_ir_command(void) {
+    size_t length = 0;
+    RingbufHandle_t rb = NULL; // Changed back to lowercase per log
+    rmt_get_ringbuf_handle(RMT_CHANNEL_0, &rb);
+    if (!rb) return IR_CMD_NONE;
+    rmt_item32_t* items = (rmt_item32_t*)xRingbufferReceive(rb, &length, 0);
+    if (items) {
+        uint32_t cmd = items[0].val;
+        vRingbufferReturnItem(rb, (void*)items);
+        return (ir_button_t)cmd;
+    }
     return IR_CMD_NONE;
 }
 
-// Read the "Road Thingy" (Analog sensors)
-void acebott_read_line_sensors(int *l, int *m, int *r) {
-    // We use the pins defined in the Acebott spec
-    // ADC1_CHANNEL_7 is GPIO 35, CHANNEL_0 is GPIO 36, CHANNEL_3 is GPIO 39
-    *l = adc1_get_raw(ADC1_CHANNEL_7); // Left (GPIO 35)
-    *m = adc1_get_raw(ADC1_CHANNEL_0); // Mid  (GPIO 36)
-    *r = adc1_get_raw(ADC1_CHANNEL_3); // Right(GPIO 39)
+void acebott_beep(uint32_t freq, uint32_t duration_ms) {
+    ledc_set_freq(LEDC_LOW_SPEED_MODE, LEDC_TIMER_0, freq);
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 4096);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
 }
