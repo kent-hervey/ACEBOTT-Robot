@@ -27,7 +27,6 @@
 #define PIN_ULTRASONIC_ECHO 27
 
 void acebott_init(void) {
-    // Configure ultrasonic echo pin as input
     gpio_config_t echo_conf = {
         .pin_bit_mask = (1ULL << PIN_ULTRASONIC_ECHO),
         .mode = GPIO_MODE_INPUT,
@@ -37,7 +36,6 @@ void acebott_init(void) {
     };
     gpio_config(&echo_conf);
 
-    // Configure motor control pins and ultrasonic trigger as outputs before use
     gpio_config_t out_conf = {
         .pin_bit_mask = (1ULL << PIN_MOTOR_EN) | (1ULL << PIN_MOTOR_DATA) | (1ULL << PIN_MOTOR_LATCH) | (1ULL << PIN_MOTOR_CLOCK) | (1ULL << PIN_ULTRASONIC_TRIG),
         .mode = GPIO_MODE_OUTPUT,
@@ -61,7 +59,7 @@ void acebott_init(void) {
     ledc_channel_config_t pwm_chan = {
         .speed_mode = LEDC_LOW_SPEED_MODE,
         .channel = LEDC_CHANNEL_0,
-        .timer_sel = LEDC_TIMER_0,   // Changed back to timer_sel per log
+        .timer_sel = LEDC_TIMER_0,
         .gpio_num = PIN_PWM1,
         .duty = 0
     };
@@ -99,26 +97,9 @@ void acebott_read_line_sensors(int *l, int *m, int *r) {
     *r = adc1_get_raw(ADC1_CHANNEL_3);
 }
 
-float acebott_get_distance(void) {
-    gpio_set_level(PIN_ULTRASONIC_TRIG, 0); esp_rom_delay_us(2);
-    gpio_set_level(PIN_ULTRASONIC_TRIG, 1); esp_rom_delay_us(10);
-    gpio_set_level(PIN_ULTRASONIC_TRIG, 0);
-    uint32_t start_tick = esp_cpu_get_cycle_count();
-    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 0) {
-        if ((esp_cpu_get_cycle_count() - start_tick) > 2000000) return -1.0f;
-    }
-    uint64_t start_time = esp_timer_get_time();
-    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 1) {
-        if ((esp_timer_get_time() - start_time) > 30000) break;
-    }
-    /* Compute in float explicitly to avoid narrowing conversion warnings */
-    float duration_us = (float)(esp_timer_get_time() - start_time);
-    return (duration_us * 0.0343f) / 2.0f;
-}
-
 ir_button_t acebott_get_ir_command(void) {
     size_t length = 0;
-    RingbufHandle_t rb = NULL; // Changed back to lowercase per log
+    RingbufHandle_t rb = NULL;
     rmt_get_ringbuf_handle(RMT_CHANNEL_0, &rb);
     if (!rb) return IR_CMD_NONE;
     rmt_item32_t* items = (rmt_item32_t*)xRingbufferReceive(rb, &length, 0);
@@ -137,4 +118,27 @@ void acebott_beep(uint32_t freq, uint32_t duration_ms) {
     vTaskDelay(pdMS_TO_TICKS(duration_ms));
     ledc_set_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0, 0);
     ledc_update_duty(LEDC_LOW_SPEED_MODE, LEDC_CHANNEL_0);
+}
+
+// MATH: Pure conversion function
+float distance_cm_from_us(int64_t duration_us) {
+    if (duration_us <= 0) return -1.0f;
+    return ((float)duration_us * 0.0343f) / 2.0f;
+}
+
+// HARDWARE: Trigger sensor and read echo
+float acebott_get_distance(void) {
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 0); esp_rom_delay_us(2);
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 1); esp_rom_delay_us(10);
+    gpio_set_level(PIN_ULTRASONIC_TRIG, 0);
+
+    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 0);
+    int64_t start_time = esp_timer_get_time();
+
+    while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 1) {
+        if ((esp_timer_get_time() - start_time) > 30000) break;
+    }
+
+    int64_t duration = (esp_timer_get_time() - start_time);
+    return distance_cm_from_us(duration);
 }
