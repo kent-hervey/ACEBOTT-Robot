@@ -26,7 +26,7 @@ void app_main(void) {
     gpio_set_direction(2, GPIO_MODE_OUTPUT);
 
     while (1) {
-        // 1. INPUTS
+        // --- SECTION 1: PERCEPTION (Read Sensors) ---
         ir_button_t cmd = acebott_get_ir_command();
         acebott_read_line_sensors(&left_val, &mid_val, &right_val);
 
@@ -36,14 +36,15 @@ void app_main(void) {
         float dist = 0.0f;
 #endif
 
-        // 2. DIAGNOSTICS (Heartbeat LED)
-        gpio_set_level(2, 1);
+        // --- SECTION 2: DIAGNOSTICS (Heartbeat & Logging) ---
+        gpio_set_level(2, 1); // LED ON
         ESP_LOGI(TAG, "STATS | Dist: %.1f | Line: %d-%d-%d | Speed: %d | Dir: %d",
                  dist, left_val, mid_val, right_val, current_speed, current_dir);
-        vTaskDelay(pdMS_TO_TICKS(25)); // LED ON time
-        gpio_set_level(2, 0);
+        vTaskDelay(pdMS_TO_TICKS(25));
+        gpio_set_level(2, 0); // LED OFF
 
-        // 3. SMART SAFETY VETO
+        // --- SECTION 3: SAFETY VETO (Obstacle Avoidance) ---
+        // If forward and too close to a wall, force a stop.
         bool obstacle_stop = false;
 #if ENABLE_ULTRASONIC
         if (dist > 0 && dist < 15.0f && current_dir == MOTOR_FORWARD) {
@@ -52,47 +53,41 @@ void app_main(void) {
         }
 #endif
 
-        // 4. REMOTE OVERRIDE (The Acceleration Logic)
+        // --- SECTION 4: USER INTENT (Remote Control) ---
+        // Manual override from IR remote takes highest priority.
         if (cmd != IR_CMD_NONE) {
             switch (cmd) {
                 case IR_CMD_UP:
-                    if (current_dir == MOTOR_BACK) {
-                        if (current_speed >= speed_step) current_speed -= speed_step;
-                        else { current_speed = 0; current_dir = MOTOR_STOP; }
-                    } else {
-                        current_dir = MOTOR_FORWARD;
-                        current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
-                    }
-                break;
+                    current_dir = MOTOR_FORWARD;
+                    current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
+                    break;
                 case IR_CMD_DOWN:
-                    if (current_dir == MOTOR_FORWARD) {
-                        if (current_speed >= speed_step) current_speed -= speed_step;
-                        else { current_speed = 0; current_dir = MOTOR_STOP; }
-                    } else {
-                        current_dir = MOTOR_BACK;
-                        current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
-                    }
-                break;
+                    current_dir = MOTOR_BACK;
+                    current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
+                    break;
                 case IR_CMD_STOP:
                     current_speed = 0;
-                current_dir = MOTOR_STOP;
-                break;
+                    current_dir = MOTOR_STOP;
+                    break;
                 default: break;
             }
             acebott_move(current_dir, current_speed);
         }
-        // 5. ROAD LOGIC (Line Following)
+
+        // --- SECTION 5: NAVIGATION (Line Following) ---
+        // Only active if we are already moving and the path is clear.
         else if (current_dir != MOTOR_STOP && !obstacle_stop) {
             int black_line_threshold = 2000;
             if (mid_val >= black_line_threshold) {
-                acebott_move(MOTOR_FORWARD, current_speed);
+                acebott_move(current_dir, current_speed); // Straight
             } else if (left_val >= black_line_threshold) {
-                acebott_move(MOTOR_CCW, 100);
+                acebott_move(MOTOR_CCW, current_speed);   // Left
             } else if (right_val >= black_line_threshold) {
-                acebott_move(MOTOR_CW, 100);
+                acebott_move(MOTOR_CW, current_speed);    // Right
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(25)); // LED OFF time (Total loop = 50ms)
+        // --- SECTION 6: LOOP TIMING ---
+        vTaskDelay(pdMS_TO_TICKS(25)); // Completes the 50ms loop cycle
     }
 }
