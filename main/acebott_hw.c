@@ -68,9 +68,9 @@ void acebott_init(void) {
     ledc_channel_config(&pwm_chan);
 
     adc1_config_width(ADC_WIDTH_BIT_12);
-    adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
-    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_11);
-    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_11);
+    adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_12);
+    adc1_config_channel_atten(ADC1_CHANNEL_0, ADC_ATTEN_DB_12);
+    adc1_config_channel_atten(ADC1_CHANNEL_3, ADC_ATTEN_DB_12);
 
     rmt_config_t rmt_rx = {
         .rmt_mode = RMT_MODE_RX, .channel = RMT_CHANNEL_0,
@@ -111,7 +111,9 @@ float acebott_get_distance(void) {
     while (gpio_get_level(PIN_ULTRASONIC_ECHO) == 1) {
         if ((esp_timer_get_time() - start_time) > 30000) break;
     }
-    return ((float)(esp_timer_get_time() - start_time) * 0.0343) / 2.0;
+    /* Compute in float explicitly to avoid narrowing conversion warnings */
+    float duration_us = (float)(esp_timer_get_time() - start_time);
+    return (duration_us * 0.0343f) / 2.0f;
 }
 
 ir_button_t acebott_get_ir_command(void) {
