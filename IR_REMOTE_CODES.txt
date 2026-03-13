@@ -1,0 +1,31 @@
+ACEBOTT Robot IR Remote Control Codes
+======================================
+
+Discovered codes for your specific QD001 IR remote:
+
+Directional/Control Buttons:
+UP button:       0x00FF629D  ✓ CONFIRMED
+DOWN button:     0x00FFA857  ✓ CONFIRMED
+LEFT button:     0x00FF22DD  ✓ CONFIRMED
+RIGHT button:    0x00FFC23D  ✓ CONFIRMED
+OK button:       0x00FF02FD  ✓ CONFIRMED
+STAR button (*): 0x00FF42BD  ✓ CONFIRMED
+HASH button (#): 0x00FF52AD  ✓ CONFIRMED
+
+Number Buttons:
+Number 0:        0x00FF4AB5  ✓ CONFIRMED
+Number 1:        0x00FF6897  ✓ CONFIRMED
+Number 2:        0x00FF9867  ✓ CONFIRMED
+Number 3:        0x00FFB04F  ✓ CONFIRMED
+Number 4:        0x00FF30CF  ✓ CONFIRMED
+Number 5:        0x00FF18E7  ✓ CONFIRMED
+Number 6:        0x00FF7A85  ✓ CONFIRMED
+Number 7:        0x00FF10EF  ✓ CONFIRMED
+Number 8:        0x00FF38C7  ✓ CONFIRMED
+Number 9:        0x00FF5AA5  ✓ CONFIRMED
+
+Notes:
+- All 17 buttons tested and confirmed working
+- These codes differ from the ACEBOTT manual but are consistent
+- Using NEC IR protocol with ESP32 RMT peripheral
+- IR receiver on GPIO 4 per ACEBOTT official wiring
