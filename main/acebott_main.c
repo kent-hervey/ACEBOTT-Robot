@@ -73,7 +73,8 @@ void app_main(void) {
     int left_val = 0, mid_val = 0, right_val = 0;
     int current_speed = 0;
     motor_dir_t current_dir = MOTOR_STOP;
-    const int speed_step __attribute__((unused)) = 40;  // 6 "gears" to reach max speed of 255
+    const int speed_step = 50;  // Speed increment per button press
+    const int min_motor_speed = 100;  // Minimum speed to overcome friction
 
     // Removed diagnostic LED setup - GPIO 2 is HEADLIGHT_R_GPIO!
 
@@ -168,44 +169,108 @@ void app_main(void) {
         // --- SECTION 4: USER INTENT (Remote Control) ---
         // Manual override from IR remote takes highest priority.
         if (cmd != IR_CMD_NONE) {
-            // TEST MODE: Just report what button was pressed, don't move motors
             switch (cmd) {
                 case IR_CMD_UP:
-                    ESP_LOGI(TAG, "✓ UP button detected - would move FORWARD");
-                    acebott_beep(2000, 100);
+                    // UP accelerates in current direction
+                    if (current_dir == MOTOR_STOP || current_dir == MOTOR_FORWARD) {
+                        // Start forward or speed up forward
+                        current_dir = MOTOR_FORWARD;
+                        if (current_speed == 0) {
+                            current_speed = min_motor_speed;  // Jump to minimum effective speed
+                        } else {
+                            current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
+                        }
+                        ESP_LOGI(TAG, "⬆ UP: Accelerating FORWARD to speed %d", current_speed);
+                        acebott_move(current_dir, current_speed);
+                        acebott_beep(2000, 50);
+                    } else if (current_dir == MOTOR_BACK) {
+                        // Slowing down backward motion
+                        current_speed = (current_speed < speed_step) ? 0 : current_speed - speed_step;
+                        if (current_speed == 0) {
+                            current_dir = MOTOR_STOP;
+                            ESP_LOGI(TAG, "⬆ UP: STOPPED (was going backward)");
+                        } else if (current_speed < min_motor_speed && current_speed > 0) {
+                            current_speed = 0;  // Don't leave it in stall zone
+                            current_dir = MOTOR_STOP;
+                            ESP_LOGI(TAG, "⬆ UP: STOPPED (was going backward)");
+                        } else {
+                            ESP_LOGI(TAG, "⬆ UP: Decelerating BACKWARD to speed %d", current_speed);
+                        }
+                        acebott_move(current_dir, current_speed);
+                        acebott_beep(2000, 50);
+                    }
                     break;
+
                 case IR_CMD_DOWN:
-                    ESP_LOGI(TAG, "✓ DOWN button detected - would move BACKWARD");
-                    acebott_beep(1800, 100);
+                    // DOWN accelerates backward or decelerates forward
+                    if (current_dir == MOTOR_STOP || current_dir == MOTOR_BACK) {
+                        // Start backward or speed up backward
+                        current_dir = MOTOR_BACK;
+                        if (current_speed == 0) {
+                            current_speed = min_motor_speed;  // Jump to minimum effective speed
+                        } else {
+                            current_speed = (current_speed + speed_step > 255) ? 255 : current_speed + speed_step;
+                        }
+                        ESP_LOGI(TAG, "⬇ DOWN: Accelerating BACKWARD to speed %d", current_speed);
+                        acebott_move(current_dir, current_speed);
+                        acebott_beep(1800, 50);
+                    } else if (current_dir == MOTOR_FORWARD) {
+                        // Slowing down forward motion
+                        current_speed = (current_speed < speed_step) ? 0 : current_speed - speed_step;
+                        if (current_speed == 0) {
+                            current_dir = MOTOR_STOP;
+                            ESP_LOGI(TAG, "⬇ DOWN: STOPPED (was going forward)");
+                        } else if (current_speed < min_motor_speed && current_speed > 0) {
+                            current_speed = 0;  // Don't leave it in stall zone
+                            current_dir = MOTOR_STOP;
+                            ESP_LOGI(TAG, "⬇ DOWN: STOPPED (was going forward)");
+                        } else {
+                            ESP_LOGI(TAG, "⬇ DOWN: Decelerating FORWARD to speed %d", current_speed);
+                        }
+                        acebott_move(current_dir, current_speed);
+                        acebott_beep(1800, 50);
+                    }
                     break;
+
                 case IR_CMD_LEFT:
-                    ESP_LOGI(TAG, "✓ LEFT button detected - would turn CCW");
-                    acebott_beep(1600, 100);
+                    ESP_LOGI(TAG, "⬅ LEFT: Turn CCW (not yet implemented)");
+                    acebott_beep(1600, 50);
                     break;
+
                 case IR_CMD_RIGHT:
-                    ESP_LOGI(TAG, "✓ RIGHT button detected - would turn CW");
-                    acebott_beep(2200, 100);
+                    ESP_LOGI(TAG, "➡ RIGHT: Turn CW (not yet implemented)");
+                    acebott_beep(2200, 50);
                     break;
+
                 case IR_CMD_OK:
-                    ESP_LOGI(TAG, "✓ OK button detected - would flash headlights");
-                    acebott_flash_headlights(1, 100);
+                    // Emergency stop
+                    current_speed = 0;
+                    current_dir = MOTOR_STOP;
+                    acebott_move(MOTOR_STOP, 0);
+                    ESP_LOGI(TAG, "⏹ OK: EMERGENCY STOP");
+                    acebott_flash_headlights(2, 100);
                     break;
+
                 case IR_CMD_STAR:
-                    ESP_LOGI(TAG, "✓ STAR (*) button detected - BEEP TEST!");
-                    acebott_beep(2000, 500);  // Long beep
+                    ESP_LOGI(TAG, "✦ STAR: Beep test");
+                    acebott_beep(2000, 200);
                     break;
+
                 case IR_CMD_HASH:
-                    ESP_LOGI(TAG, "✓ HASH (#) button detected - HEADLIGHT TEST!");
-                    acebott_flash_headlights(3, 200);
+                    ESP_LOGI(TAG, "# HASH: Headlight flash test");
+                    acebott_flash_headlights(3, 150);
                     break;
+
                 default:
-                    ESP_LOGI(TAG, "✗ UNKNOWN button: Code 0x%08X", (unsigned int)cmd);
+                    ESP_LOGI(TAG, "? UNKNOWN button: Code 0x%08X", (unsigned int)cmd);
                     break;
             }
         }
 
         // --- SECTION 5: NAVIGATION (Line Following) ---
-        // Only active if we are already moving and the path is clear.
+        // DISABLED for manual IR control demo
+        // Uncomment below to enable line-following mode
+        /*
         else if (current_dir != MOTOR_STOP && !obstacle_stop) {
             int black_line_threshold = 2000;
             if (mid_val >= black_line_threshold) {
@@ -219,6 +284,7 @@ void app_main(void) {
                 acebott_move(MOTOR_CW, current_speed);    // Right
             }
         }
+        */
 
         // --- SECTION 6: LOOP TIMING ---
         vTaskDelay(pdMS_TO_TICKS(200)); // Completes the 50ms loop cycle
