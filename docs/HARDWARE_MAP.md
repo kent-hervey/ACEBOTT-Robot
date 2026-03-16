@@ -5,55 +5,51 @@ This document serves as the master "Source of Truth" for the GPIO pin assignment
 ---
 
 ## 🏎️ Drive System (Mecanum Wheels)
-The robot uses an **L298N H-Bridge** driver. To support 4WD with a 2-channel driver, the front and rear motors on each side are wired in parallel.
+The robot uses a shift-register based motor driver (74HC595) to control direction and two PWM channels for speed.
 
 | Component | GPIO Pin | Function |
 | :--- | :--- | :--- |
-| **Left Side (Front & Rear)** | `GPIO 16`, `GPIO 17` | PWM Speed & Direction |
-| **Right Side (Front & Rear)** | `GPIO 18`, `GPIO 19` | PWM Speed & Direction |
+| **Enable (EN)** | `GPIO 16` | Driver Enable |
+| **Data (SER)** | `GPIO 5` | Shift Register Data |
+| **Latch (RCLK)** | `GPIO 17` | Shift Register Latch |
+| **Clock (SRCLK)** | `GPIO 18` | Shift Register Clock |
+| **PWM Left** | `GPIO 19` | Speed control (Left Side) |
+| **PWM Right** | `GPIO 23` | Speed control (Right Side) |
 
 ---
 
 ## 👁️ Sensors & Logic (Navigation)
-These sensors allow for autonomous movement and environment scanning.
 
 ### 🦇 Ultrasonic Obstacle Avoidance
-* **Trig (Trigger):** `GPIO 5`
-* **Echo:** `GPIO 18` (Signal Return)
-* **Servo Mount:** `GPIO 2` (Rotates the sensor 0°–180°)
+* **Trig (Trigger):** `GPIO 13`
+* **Echo:** `GPIO 14`  *(Updated per hardware shield)*
+* **Servo (Head):** `GPIO 25` (Rotates the sensor)
 
 ### 🛤️ Line Tracing (Under-Chassis)
-Used for the "Line Follower" mode to detect floor contrast.
-* **Left Sensor:** `GPIO 34`
-* **Middle Sensor:** `GPIO 35`
-* **Right Sensor:** `GPIO 36`
+* **Left Sensor:** `GPIO 35`
+* **Middle Sensor:** `GPIO 36`
+* **Right Sensor:** `GPIO 39`
+
+### 🎮 Remote Control
+* **IR Receiver:** `GPIO 4`
 
 ---
 
-## 📡 User Interface & Feedback
-Components used for manual control and status indications.
+## 📡 Outputs & Feedback
 
-### 🎮 Inputs
-* **IR Receiver:** `GPIO 32` (NEC Protocol / 38kHz)
-
-### 📢 Outputs
-* **Passive Buzzer:** `GPIO 25` (Requires PWM for tonal feedback)
-* **Left Blue LED:** `GPIO 13`
-* **Right Blue LED:** `GPIO 12`
+### 📢 Sound & Light
+* **Buzzer:** `GPIO 33`
+* **Headlight (Left):** `GPIO 12`
+* **Headlight (Right):** `GPIO 2`
 
 ---
 
-## 💡 IR Control & Sound Logic
-When receiving commands via the IR Remote, the following feedback is implemented:
-
-| IR Button | Action | Sound Feedback |
-| :--- | :--- | :--- |
-| **Up Arrow** | Increase Speed | Short High-Pitch Beep (ascending) |
-| **Down Arrow** | Decrease Speed | Short Low-Pitch Beep (descending) |
-| **OK / Stop** | Emergency Stop | Long, Flat Tone (warning) |
+## 📖 Assembly Instructions
+For physical construction and wiring diagrams, refer to the official manual:
+* 📄 **[Assemble the Smart Car (PDF)](<Assemble the smart car.pdf>)**
 
 ---
 
 ## ⚠️ Development Notes
-* **Input Only:** GPIOs 34, 35, and 36 are input-only pins on the ESP32 and lack internal pull-ups.
-* **Center Alignment:** Use `<p align="center">` for images in GitHub READMEs to ensure compatibility across browsers.
+* **Input Only:** GPIOs 35, 36, and 39 are input-only pins on the ESP32 and lack internal pull-ups.
+* **Strapping Pins:** GPIO 12 and GPIO 2 are strapping pins. Ensure they are not pulled high/low during boot in a way that interferes with the ESP32 flash mode.
