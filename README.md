@@ -3,7 +3,9 @@
 This repository contains the ESP-IDF firmware for the **ACEBOTT ESP32 Robot Car**.
 
 ### 📖 Project Resources
+### 📖 Project Resources
 * **Official Product Page:** [ACEBOTT QD001 Smart Car Kit](https://shop.acebott.com/products/qd001-esp32-smart-car-kit-collection)
+* **Assembly Guide:** [Assemble the Smart Car (PDF)](<docs/Assemble the smart car.pdf>)
 * **Hardware Documentation:** [Hardware GPIO Map](docs/HARDWARE_MAP.md)
 * **Technical Overview:** [How It Works](docs/HOW_IT_WORKS.md)
 
